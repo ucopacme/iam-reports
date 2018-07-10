@@ -26,21 +26,16 @@ setup(
         'Programming Language :: Python :: 3.6',
     ],
     keywords='aws organizations iam',
-    #packages=find_packages(exclude=['scratch', 'notes']),
     packages=find_packages(),
-    install_requires=['boto3', 'docopt', 'PyYAML'],
-    package_data={
-        'iamreports': [
-        ],
-    },
-    entry_points={
-        'console_scripts': [
-            'awsorgs=awsorgs.orgs:main',
-            'awsaccounts=awsorgs.accounts:main',
-            'awsauth=awsorgs.auth:main',
-            'awsloginprofile=awsorgs.loginprofile:main',
-            'awsorgs-accessrole=awsorgs.accessrole:main',
-        ],
-    },
+    #packages=find_packages(exclude=['scratch', 'notes']),
+    install_requires=['boto3', 'docopt', 'PyYAML', 'awscli'],
+    #package_data={
+    #    'iamreports': [
+    #    ],
+    #},
+    #entry_points={
+    #    'console_scripts': [
+    #    ],
+    #},
 
 )
