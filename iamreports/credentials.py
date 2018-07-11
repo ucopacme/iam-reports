@@ -1,3 +1,5 @@
+#/usr/bin/env python
+
 import os
 import sys
 import io
@@ -5,11 +7,13 @@ import csv
 import json
 import time
 from datetime import datetime, timedelta
+import pickle
 
 import boto3
 import yaml
 
 from iamreports.utils import yamlfmt
+
 
 def get_datetime_object_from_date_string(date_string):
     # strip off tz suffix:
@@ -35,13 +39,25 @@ class CredentialReporter(object):
         else:
             self.raw_report = self._get_raw_credential_report_from_aws()
         self.timestamp = self.raw_report['GeneratedTime']
-        self.decoded_csv_report_object = self._decode_raw_report()
+        self.user_data = self._extract_content()
+
+
+    def save_to_file(self, output_file=None):
+        try:
+            with open(output_file, 'wb') as fd:
+                pickle.dump(self.raw_report, fd)
+        except Exception as e:
+            sys.exit('could not write report file {}: {}'.format(output_file, e))
+        
+
+    def save_to_s3(self, s3_bucket, s3_key):
+        pass
 
 
     def _read_raw_credentials_report_from_file(self, source_file):
         try:
-            with open(source_file, 'r') as fd:
-                return json.load(fd)
+            with open(source_file, 'rb') as fd:
+                return pickle.load(fd)
         except Exception as e:
             sys.exit('could not open report file {}: {}'.format(source_file, e))
 
@@ -66,49 +82,50 @@ class CredentialReporter(object):
                 sys.exit('could not :generate credentials report {}'.format(e))
 
 
-    def _decode_raw_report(self):
+    def _extract_content(self):
+        # raw report 'Content' is a base64 encoded csv blob
         try:
-            return io.StringIO(self.raw_report['Content'].decode())
-        except AttributeError:
-            return io.StringIO(self.raw_report['Content'])
+            content = io.StringIO(self.raw_report['Content'].decode())
         except KeyError as e:
-            sys.exit('credentials report empty: {}'.format(e))
+            sys.exit('credentials report has no content: {}'.format(e))
+        reader = csv.DictReader(content)
+        user_data = []
+        for row in reader:
+            user = dict()
+            for key in reader.fieldnames:
+                user[key] = row[key]
+            user_data.append(user)
+        return user_data
+
+    def list_aged_out_users(self, date_field, age_in_days):
+        aged_out_users = []
+        now = datetime.utcnow()
+        user_date_map = {x['user']: x[date_field] for x in self.user_data}
+        for user, date_string in user_date_map.items():
+            try:
+                then = get_datetime_object_from_date_string(date_string)
+                if now - then > timedelta(days=age_in_days):
+                    aged_out_users.append(user)
+            except ValueError:
+                pass
+        return aged_out_users
+
+    def list_users_with_aged_out_passwords(self, age_in_days):
+        return self.list_aged_out_users('password_last_changed', age_in_days)
 
 
-    def save_to_file(self, output_file=None):
-        pass
 
-    def save_to_s3(self, s3_bucket, s3_key):
-        pass
+if __name__ == '__main__':
+    credential_report = CredentialReporter()
+    credential_report.load()
+    #print(yamlfmt(credential_report.raw_report))
+    #print(type(credential_report.raw_report['Content']))
+    #print(yamlfmt(credential_report.user_data))
+    credential_report.save_to_file('/tmp/credential_report.pkl')
 
-#def get_iam_credential_report():
-#    """
-#    Generate or retrive an IAM Credential report for this account.
-#    Returns a csv formated file object.
-#    """
-#    client = boto3.client('iam')
-#    try:
-#        response = client.get_credential_report()
-#    except client.exceptions.CredentialReportNotPresentException as e:
-#        client.generate_credential_report()
-#        time.sleep(60)
-#        response = client.get_credential_report()
-#    csv_report_file_object = io.StringIO(response['Content'].decode())
-#    return csv_report_file_object
-#
-#def read_iam_credential_report(csv_report_file_object):
-#    """
-#    Read csv formatted file object into a list of dictionaries.
-#    """
-#    reader = csv.DictReader(csv_report_file_object)
-#    credentials_report = []
-#    for row in reader:
-#        user = dict()
-#        for key in reader.fieldnames:
-#            user[key] = row[key]
-#        credentials_report.append(user)
-#    return credentials_report
-#
+
+
+
 #def list_aged_out_users(credentials_report, date_field, age_in_days):
 #    aged_out_users = []
 #    now = datetime.utcnow()
@@ -149,9 +166,6 @@ class CredentialReporter(object):
 #
 #def get_report_for_users_in_group(credentials_report, group_name):
 #    return get_report_for_users(credentials_report, list_users_in_group(group_name))
-#
-#
-#
 #
 #if __name__ == '__main__':
 #
