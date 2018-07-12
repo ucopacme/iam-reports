@@ -5,6 +5,7 @@ import time
 import io
 import csv
 from datetime import datetime, timedelta
+from iamreports.utils import yamlfmt
 
 
 def get_passwd_policy():
@@ -37,9 +38,14 @@ def delete_passwd_policy():
 
 
 if __name__ == '__main__':
-    #response = set_passwd_policy()
+    set_passwd_policy()
+    response = get_passwd_policy()
+    print(yamlfmt(response))
+    #delete_passwd_policy()
     #response = get_passwd_policy()
     #print(yamlfmt(response))
-    #response = delete_passwd_policy()
-    #response = get_passwd_policy()
-    #print(yamlfmt(response))
+
+
+
+
+##### Notes #####
